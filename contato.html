@@ -33,40 +33,32 @@
   <div id="sucesso" class="mensagem-sucesso">
     ✓ <span id="sucesso-texto">Mensagem enviada com sucesso.</span>
   </div>
+  <div id="erro" class="mensagem-erro">
+    ✗ <span id="erro-texto">Erro ao enviar. Tente novamente.</span>
+  </div>
 
   <form class="formulario" id="form-contato" onsubmit="return enviarForm(event)">
-    <label class="campo">
-      <span>Nome completo</span>
-      <input type="text" name="nome" maxlength="100" required>
-    </label>
     <label class="campo">
       <span>E-mail</span>
       <input type="email" name="email" maxlength="255" required>
     </label>
     <label class="campo">
       <span>Parque estadual</span>
-      <select name="parque" required>
-        <option value="">Selecione um parque</option>
-        <option>Parque Estadual Acaraí</option>
-        <option>Parque Estadual do Rio Canoas</option>
-        <option>Parque Estadual do Rio Vermelho</option>
-        <option>Parque Estadual das Araucárias</option>
+      <select name="parque" id="select-parque" required>
+        <option value="">Carregando parques...</option>
       </select>
     </label>
-    <div class="campo">
-      <span>Tipo de comunicação</span>
-      <div class="radio-grupo">
-        <label><input type="radio" name="tipo" value="Denúncia" required> Denúncia</label>
-        <label><input type="radio" name="tipo" value="Sugestão"> Sugestão</label>
-      </div>
-    </div>
+    <label class="campo">
+      <span>Título da comunicação</span>
+      <input type="text" name="titulo" maxlength="200" required>
+    </label>
+    <label class="campo">
+      <span>Descrição detalhada</span>
+      <textarea name="mensagem" minlength="10" maxlength="1000" required></textarea>
+    </label>
     <label class="campo">
       <span>Data e hora do envio</span>
       <input type="datetime-local" name="datahora" id="datahora" required>
-    </label>
-    <label class="campo">
-      <span>Mensagem</span>
-      <textarea name="mensagem" minlength="10" maxlength="1000" required></textarea>
     </label>
     <p class="aviso">A data e hora podem ser ajustadas, mas são preenchidas automaticamente com o momento atual.</p>
     <button type="submit" class="botao botao-verde" style="width:100%">Enviar comunicação</button>
@@ -74,44 +66,89 @@
 </section>
 
 <script>
-  function agoraLocal(){
+  const API_BASE = 'http://localhost:3000';
+
+  function agoraLocal() {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0,16);
+    return d.toISOString().slice(0, 16);
   }
   document.getElementById('datahora').value = agoraLocal();
 
-  function enviarForm(e){
+  async function carregarParques() {
+    const select = document.getElementById('select-parque');
+    try {
+      const resp = await fetch(`${API_BASE}/unidades-conservacao`);
+      const parques = await resp.json();
+      select.innerHTML = '<option value="">Selecione um parque</option>';
+      parques.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.nome;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      select.innerHTML = '<option value="">Erro ao carregar parques</option>';
+      console.error('Erro ao buscar parques:', err);
+    }
+  }
+  carregarParques();
+
+  async function enviarForm(e) {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const registro = {
-      nome: fd.get('nome'),
-      email: fd.get('email'),
-      parque: fd.get('parque'),
-      tipo: fd.get('tipo'),
-      datahora: fd.get('datahora'),
-      mensagem: fd.get('mensagem'),
-      enviadoEm: new Date().toISOString()
+
+    const body = {
+      titulo:                  fd.get('titulo'),
+      descricao:               fd.get('mensagem'),
+      email:                   fd.get('email'),
+      unidade_conservacao_id:  fd.get('parque'),
+      datahora:                fd.get('datahora'),
+      status:                  0
     };
-    const lista = JSON.parse(localStorage.getItem('comunicacoes') || '[]');
-    lista.unshift(registro);
-    localStorage.setItem('comunicacoes', JSON.stringify(lista));
 
     const sucesso = document.getElementById('sucesso');
-    const texto = document.getElementById('sucesso-texto');
-    const dh = new Date(registro.datahora).toLocaleString('pt-BR');
-    texto.textContent = `${registro.tipo} para ${registro.parque} — registrada em ${dh}. Veja o histórico na página do parque.`;
-    sucesso.classList.add('visivel');
-    e.target.reset();
-    document.getElementById('datahora').value = agoraLocal();
-    window.scrollTo({top:0,behavior:'smooth'});
+    const erro    = document.getElementById('erro');
+    sucesso.classList.remove('visivel');
+    erro.classList.remove('visivel');
+
+    try {
+      const resp = await fetch(`${API_BASE}/comunicacoes`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body)
+      });
+
+      if (resp.ok) {
+        const dh = new Date(body.datahora).toLocaleString('pt-BR');
+        document.getElementById('sucesso-texto').textContent =
+          `Comunicação registrada em ${dh}. Em breve será analisada pelos responsáveis.`;
+        sucesso.classList.add('visivel');
+        e.target.reset();
+        document.getElementById('datahora').value = agoraLocal();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        const detalhes = await resp.json().catch(() => ({}));
+        document.getElementById('erro-texto').textContent =
+          'Erro ao enviar. ' + (detalhes.message || `Status ${resp.status}`);
+        erro.classList.add('visivel');
+      }
+    } catch (err) {
+      document.getElementById('erro-texto').textContent =
+        'Não foi possível conectar ao servidor. Verifique se o back-end está rodando.';
+      erro.classList.add('visivel');
+      console.error(err);
+    }
+
     return false;
   }
 </script>
+
 <footer class="rodape">
   <div class="rodape-conteudo">
     <p>© 2026 Portal dos Parques Estaduais de SC</p>
     <a href="contato.html">Enviar denúncia ou sugestão →</a>
   </div>
 </footer>
-</body></html>
+</body>
+</html>
