@@ -6,7 +6,7 @@ async function enviarForm(e) {
     titulo: fd.get('titulo'),
     descricao: fd.get('mensagem'),
     email: fd.get('email'),
-    unidade_conservacao_id: fd.get('parque'),
+    id_unidade: fd.get('parque'),
     datahora: fd.get('datahora'),
     status: 0
   };
