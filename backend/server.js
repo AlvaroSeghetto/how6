@@ -45,10 +45,10 @@ app.post('/comunicacoes', (req, res) => {
 });
 
 app.get('/comunicacoes/:id_unidade', (req, res) => {
-    const { id_unidade } = req.params;
     const sql = `
         SELECT * FROM comunicacao
         WHERE id_unidade = ?
+        ORDER BY datahora DESC
     `;
     db.query(sql, [id_unidade], (err, results) => {
         if (err) return res.status(500).json(err);

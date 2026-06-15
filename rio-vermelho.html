@@ -63,46 +63,65 @@
 </section>
 <section class="historico" id="historico">
   <h2>Histórico de comunicações</h2>
-  <p class="historico-sub">Mensagens enviadas pelos visitantes sobre este parque (armazenadas neste navegador).</p>
+  <p class="historico-sub">Mensagens enviadas pelos visitantes sobre este parque.</p>
   <div id="historico-lista" class="historico-lista">
-    <p class="historico-vazio">Nenhuma comunicação registrada ainda. <a href="contato.html">Seja o primeiro a enviar →</a></p>
-  </div>
-  <div style="text-align:right;margin-top:1rem">
-    <button type="button" class="botao-limpar" onclick="limparHistorico()">Limpar histórico</button>
+    <p class="historico-vazio">Carregando comunicações...</p>
   </div>
 </section>
+
 <script>
-  const PARQUE_ATUAL = "Parque Estadual do Rio Vermelho";
-  function escaparHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-  function renderHistorico(){
-    const lista = JSON.parse(localStorage.getItem('comunicacoes')||'[]')
-      .filter(r => r.parque === PARQUE_ATUAL);
+  const API_BASE = 'http://localhost:3000';
+  const NOME_PARQUE = 'Parque Estadual Acaraí'; // ← única linha que muda por página
+
+  function escaparHtml(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  async function carregarComunicacoes() {
     const cont = document.getElementById('historico-lista');
-    if(!lista.length){
-      cont.innerHTML = '<p class="historico-vazio">Nenhuma comunicação registrada ainda. <a href="contato.html">Seja o primeiro a enviar →</a></p>';
-      return;
+    try {
+      // 1. Busca todos os parques para achar o ID pelo nome
+      const respParques = await fetch(`${API_BASE}/unidades-conservacao`);
+      const parques = await respParques.json();
+      const parque = parques.find(p => p.nome === NOME_PARQUE);
+
+      if (!parque) {
+        cont.innerHTML = '<p class="historico-vazio">Parque não encontrado no banco de dados.</p>';
+        return;
+      }
+
+      // 2. Busca as comunicações desse parque (já ordenadas DESC no backend)
+      const respComm = await fetch(`${API_BASE}/comunicacoes/${parque.id}`);
+      const lista = await respComm.json();
+
+      if (!lista.length) {
+        cont.innerHTML = '<p class="historico-vazio">Nenhuma comunicação registrada ainda. <a href="contato.html">Seja o primeiro a enviar →</a></p>';
+        return;
+      }
+
+      cont.innerHTML = lista.map(r => {
+        const dh = new Date(r.datahora).toLocaleString('pt-BR');
+        const status = r.status === 1 ? 'Analisada' : 'Em análise';
+        const tagClasse = r.status === 1 ? 'tag-sugestao' : 'tag-denuncia';
+        return `<article class="historico-item">
+          <header>
+            <span class="tag ${tagClasse}">${status}</span>
+            <time>${escaparHtml(dh)}</time>
+          </header>
+          <h3 class="historico-titulo">${escaparHtml(r.titulo)}</h3>
+          <p class="historico-mensagem">${escaparHtml(r.descricao)}</p>
+          <footer>${escaparHtml(r.email)}</footer>
+        </article>`;
+      }).join('');
+
+    } catch (err) {
+      cont.innerHTML = '<p class="historico-vazio">Erro ao carregar comunicações. Verifique se o servidor está rodando.</p>';
+      console.error(err);
     }
-    cont.innerHTML = lista.map(r => {
-      const dh = new Date(r.datahora).toLocaleString('pt-BR');
-      const tipoClasse = r.tipo === 'Denúncia' ? 'tag-denuncia' : 'tag-sugestao';
-      return `<article class="historico-item">
-        <header>
-          <span class="tag ${tipoClasse}">${escaparHtml(r.tipo)}</span>
-          <time>${escaparHtml(dh)}</time>
-        </header>
-        <p class="historico-mensagem">${escaparHtml(r.mensagem)}</p>
-        <footer><strong>${escaparHtml(r.nome)}</strong> · ${escaparHtml(r.email)}</footer>
-      </article>`;
-    }).join('');
   }
-  function limparHistorico(){
-    if(!confirm('Remover todas as comunicações registradas neste navegador?')) return;
-    const restantes = JSON.parse(localStorage.getItem('comunicacoes')||'[]')
-      .filter(r => r.parque !== PARQUE_ATUAL);
-    localStorage.setItem('comunicacoes', JSON.stringify(restantes));
-    renderHistorico();
-  }
-  renderHistorico();
+
+  carregarComunicacoes();
 </script>
 <footer class="rodape">
   <div class="rodape-conteudo">
